@@ -60,7 +60,7 @@ It seems to me that the lack of consensus and of a clear, causal relationship be
 
 If the practice of TDD is not dogmatic, then what is it?  What are you supposed to call those weird people who like to use it, anyway?
 
-Stay tuned for the next part in the series!
+Stay tuned for the [next part in the series]({{ site.baseurl }}{% post_url 2018-03-28-tdd-as-a-discipline %})!
 
 
 [dogma-definition]: https://www.google.com/search?q=Dictionary#dobs=dogma
