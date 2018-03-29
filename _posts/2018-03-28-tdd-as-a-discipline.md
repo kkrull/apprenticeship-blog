@@ -25,9 +25,9 @@ You have to tell yourself "no" a lot, every time you think about something you w
 
 And in the case of TDD, it's not clear if the adults in the room will be sadistic enough to alter the deal and give you bowl of brussel sprouts instead, as your "reward" for all that waiting.
 
-So if your vision of the finish line is *completing a draft of the production code* - and you assume that the production code resulting from a TDD session is exactly what you would have written anyway - the measured pace of writing no more code than you need to pass the tests may seem very slow, indeed.  It may defy your sense of reason for somebody to spend the extra time doing TDD to reach a certain point in the development process, when you assume that writing code is a linear sequence of knowing what you want to write, starting at the top, and working your way to the bottom.
+So if your vision of the finish line is *completing a draft of the production code* — and you assume that the production code resulting from a TDD session is exactly what you would have written anyway — the measured pace of writing no more code than you need to pass the tests may seem very slow, indeed.  It may defy your sense of reason for somebody to spend the extra time doing TDD to reach a certain point in the development process, when you assume that writing code is a linear sequence of knowing what you want to write, starting at the top, and working your way to the bottom.
 
-*Sutained action in the face of contradictory facts?  Seems to me somebody's being a bit dogmatic!*
+*Sustained action in the face of contradictory facts?  Seems to me somebody's being a bit dogmatic!*
 
 
 ### There's no ground truth
@@ -57,11 +57,11 @@ But do cases like this *always* happen?  Is the amount of time available for fea
 
 ### TDD is hard
 
-Test-Driven Development is a skill.  You have to learn the principles and practice until you get good at it, just like you would for writing concurrent programs on a multi-threaded platform, responsive UIs for a variety of screen sizes, or Continuation Passing Style in a functional language.  Colleges don't usually offer much training in the ways of TDD, and - when you start working - you tend to pick up the habits of those around you.
+Test-Driven Development is a skill.  You have to learn the principles and practice until you get good at it, just like you would for writing concurrent programs on a multi-threaded platform, responsive UIs for a variety of screen sizes, or Continuation Passing Style in a functional language.  Colleges don't usually offer much training in the ways of TDD, and — when you start working — you tend to pick up the habits of those around you.
 
 So you may not get much time to practice, without a fairly exceptional team or a lot of personal drive.
 
-To make matters worse, it can be embarassingly difficult to test-drive even simple algorithms like [Minimax][minimax].  While it can be a fun challenge that makes you think in different ways about your design and your approach to TDD, it can also take a really long time to test-drive 15 lines of pseudocode.
+To make matters worse, it can be embarrassingly difficult to test-drive even simple algorithms like [Minimax][minimax].  While it can be a fun challenge that makes you think in different ways about your design and your approach to TDD, it can also take a really long time to test-drive 15 lines of pseudocode.
 
 
 ## What? You can't be done yet!
