@@ -5,7 +5,7 @@ date:   2018-03-28 07:31:00 -0500
 categories: tdd philosophy
 ---
 
-This is part of an [on-going series]({{ site.baseurl }}{% post_url 2018-03-23-tdd-is-not-dogmatic %}) discussing the Philosophy of Test-Driven Development.
+This is part of an [on-going series]({{ site.baseurl }}{% post_url 2018-03-23-tdd-is-not-dogmatic %}) discussing my philosophy of Test-Driven Development.
 
 
 ## Why it seems dogmatic
