@@ -86,6 +86,6 @@ When I get a chance, there are a few ideas I could explore:
 I'm not even sure if that would work, and it's hard to imagine it being very easy to read.
 
 * Write a stripped-down `Promise` or `Either` type, that's specific to the domain.  It's hard to imagine this being small, and it would be next to impossible to reuse due to the lack of templating / generics.
-* Maybe some sort of state-machine / Continuation Passing style?  There would be a function for each state, that calls the next function, and so on...
+* Maybe some sort of state-machine / Continuation Passing Style?  There would be a function for each state, that calls the next function, and so on...
 
 Or maybe like other annoyances with Go, I'm just supposed to accept it and move on?  Could the lack of options be useful constraint that propels me to write more features?
