@@ -1,6 +1,6 @@
 ---
 layout: post
-title:  "TDD Tips: What do to when you're stuck"
+title:  "DRAFT TDD Tips: What do to when you're stuck"
 date:   2018-04-06 08:00:00 -0500
 categories: go tdd
 ---
