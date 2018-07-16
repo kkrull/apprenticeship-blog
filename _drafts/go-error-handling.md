@@ -100,10 +100,13 @@ Back to the code in question - we can explore different structures that may impr
 
 Let us briefly consider a few tempting options that are likely to raise eyebrows in the Go community, in all but the rarest of circumstances.
 
+
+### Defer, Panic, Recover
+
 The first is called [Defer, Panic, and Recover][golang-blog-defer-panic-recover], where `panic` and `recover` are used to simulate the effects of `throw` and `catch` in other languages like Java and C#.  There are a few points worth noting here:
 
-* Although the authors do [cite a case where it's used in Go standard libraries][json-decode], note that these details are never exposed to the client.  `panic` is used for specific circumstances, and - outside of this function - is reserved for the truly catastrophic, non-recoverable events (like not being able to allocate memory).
-* The theoretical argument that exceptions break Referential Transparency.  Martin Odersky describes this well in his book [Functional Programming in Scala][fp-in-scala-book].  If you don't have access to the book, his [examples are on GitHub][fp-in-scala-example], and there is a [concise explanation in this answer][stackoverflow-referential-transparency].
+* Although the authors do [cite a case where it's used in Go standard libraries][json-decode], note that these details are never exposed to the client.  Outside of this function, `panic` is reserved for truly catastrophic, non-recoverable errors (much like the [`Error` class in Java][java-error]).
+* The theoretical argument that exceptions break Referential Transparency.  Martin Odersky describes this well in his book [Functional Programming in Scala][fp-in-scala-book].  To sum it up: code that can throw an exception can evaluate to different values depending on whether or not it is surrounded in a `try/catch` block, so the programmer has to be aware of more, global context.  There's a nice [example of this on GitHub][fp-in-scala-example] and a [concise explanation in this answer][stackoverflow-referential-transparency].
 * The practical argument that it can be [difficult to distinguish correct and incorrect exception-based code][chen-harder-to-recognize].
 
 
@@ -111,38 +114,96 @@ The first is called [Defer, Panic, and Recover][golang-blog-defer-panic-recover]
 [fp-in-scala-book]: https://www.manning.com/books/functional-programming-in-scala
 [fp-in-scala-example]: https://github.com/fpinscala/fpinscala/blob/master/exercises/src/main/scala/fpinscala/errorhandling/Option.scala
 [golang-blog-defer-panic-recover]: https://blog.golang.org/defer-panic-and-recover
+[java-error]: https://docs.oracle.com/javase/8/docs/api/?java/lang/Error.html
 [json-decode]: https://golang.org/src/encoding/json/decode.go
 [stackoverflow-referential-transparency]: https://stackoverflow.com/a/28993780
 
 
-## Promise-lite?
+### Higher-order functions and wrapper types
 
-Back to the code in question, there really isn't a good way in Go to write a general-purpose, higher-order `map` function without also sacrificing type safety.  There may be opportunities to 
+Go authors like Rob Pike say over and over again to [just write a "for" loop][robpike-filter], but it's hard to resist thinking about the example problem in terms of a series of transformations.  After all, isn't the example code just going through a sequence of steps?
 
-https://github.com/chebyrash/promise
+* read the first line of text up to CRLF from the `bufio.Reader`
+* parse that line into a `RequestLine{ Method, Target, Version string }`
+* look through known routes for the given `RequestLine` to get an executable `Request{ Handle(client io.Writer) }`
+* -or- return the first error `Reponse` encountered, during the process.
 
-* type-safety has been abandoned
-* IMO this is not idiomatic.
+Go is a statically typed language without generics.  That means the following options are out:
+
+* A type-safe [`Either` type][scala-either] like the one in Scala
+* Wrapping normal and error values in a tuple, as in Erlang and Elixir
+* Writing type-safe versions of higher-order functions like `map`
+
+One could write a few trivial variations like `func mapIntToInt(value int, func(int) int) int` and `func mapStringToInt(value string, func(string) int) int`, but that doesn't help with our own, custom types.
+
+If type safety is to be abandoned, there are options like [this Go Promise library][github-go-promise].  But why then are you using a language with static types if you're going to bypass type checking?
+
+The final option is to write your own, domain-specific `Map` functions inside your own package.  That may be practical under some circumstances, but the example code grows unreasonably large.  For this code to work (which doesn't technically, because intermediate results are needed later):
+
+{% highlight go %}
+func (router RequestLineRouter) parseRequestLine(reader *bufio.Reader) (Request, Response) {
+	request, response := newStringOrResponse(readCRLFLine(reader)).
+		Map(parseRequestLine).
+		Map(router.routeRequest)
+
+	if response != nil {
+		return nil, response
+	} else if request == nil {
+		return nil, requested.NotImplemented()
+	} else {
+		return request, nil
+	}
+}
+{% endhighlight %}
+
+It request a **significant** amount of support code:
+
+{% highlight go %}
+func newStringOrResponse(data string, err Response) *StringOrResponse {
+	return &StringOrResponse{data: data, err: err}
+}
+
+type StringOrResponse struct {
+	data string
+	err Response
+}
+
+func (mapper *StringOrResponse) Map(makeRequestLine func(text string) (*RequestLine, Response)) *RequestLineOrResponse {
+	if mapper.err != nil {
+		return &RequestLineOrResponse{data: nil, err: mapper.err}
+	}
+
+	requestLine, err := makeRequestLine(mapper.data)
+	if err != nil {
+		return &RequestLineOrResponse{data: nil, err: mapper.err}
+	}
+
+	return &RequestLineOrResponse{data: requestLine, err: nil}
+}
+
+type RequestLineOrResponse struct {
+	data *RequestLine
+	err Response
+}
+
+func (mapper *RequestLineOrResponse) Map(routeRequest func(requested *RequestLine) Request) (Request, Response) {
+	if mapper.err != nil {
+		return nil, mapper.err
+	}
+
+	return routeRequest(mapper.data), nil
+}
+{% endhighlight %}
+
+So this approach is either non-idiomatic, impractical, or both.
 
 
+[github-go-promise]: https://github.com/chebyrash/promise
+[robpike-filter]: https://github.com/robpike/filter
+[scala-either]: https://www.scala-lang.org/api/2.9.3/scala/Either.html
 
 
-## Plain old if statements (make no change)
-
-* Errors are a value.  You handle these values like you would handle any other value.
-* Start with my original request parsing example
-
-
-If you stop reading here and stick to if statements
-
-* you're likely to be writing idiomatic Go code
-* if you have tested and they are passing, you may be able to move on
-* although a bit polarizing, the ability to have working code and move on without getting distracted is valuable
-
-
-
-
-## Intro
+## Back to Refactoring
 
 How it works
 
@@ -174,16 +235,17 @@ Goals
 * remember - not having your favorite mechanism for error handling does make you think
 
 
-## Notes from FP in Scala
+## Plain old if statements (make no change)
 
-Another way of understanding RT is that the meaning of RT expressions does not depend on context and may be reasoned about locally, whereas the meaning of non-RT expressions is context-dependent and requires more global reasoning. For instance, the meaning of the RT expression 42 + 5 doesn’t depend on the larger expression it’s embedded in—it’s always and forever equal to 47. But the meaning of the expression throw new Exception("fail") is very context-dependent—as we just demonstrated, it takes on different meanings depending on which try block (if any) it’s nested within.
+* Errors are a value.  You handle these values like you would handle any other value.
+* Start with my original request parsing example
 
-There are two main problems with exceptions:
 
-As we just discussed, exceptions break RT and introduce context dependence, moving us away from the simple reasoning of the substitution model and making it possible to write confusing exception-based code. This is the source of the folklore advice that exceptions should be used only for error handling, not for control flow.
-Exceptions are not type-safe. The type of failingFn, Int => Int tells us nothing about the fact that exceptions may occur, and the compiler will certainly not force callers of failingFn to make a decision about how to handle those exceptions. If we forget to check for an exception in failingFn, this won’t be detected until runtime.
+If you stop reading here and stick to if statements
 
-Java’s checked exceptions at least force a decision about whether to handle or reraise an error, but they result in significant boilerplate for callers. More importantly, they don’t work for higher-order functions, which can’t possibly be aware of the specific exceptions that could be raised by their arguments. For example, consider the map function we defined for List:
+* you're likely to be writing idiomatic Go code
+* if you have tested and they are passing, you may be able to move on
+* although a bit polarizing, the ability to have working code and move on without getting distracted is valuable
 
 
 ## First approach - refactor your control flow
@@ -209,22 +271,6 @@ https://blog.golang.org/error-handling-and-go
 
 > In Go, error handling is important. The language's design and conventions encourage you to explicitly check for errors where they occur (as distinct from the convention in other languages of throwing exceptions and sometimes catching them). In some cases this makes Go code verbose, but fortunately there are some techniques you can use to minimize repetitive error handling.
 
-
-## Wrapper with pattern matching-ish?  (sort of like Either)
-
-Cite the swish / pattern matching example.
-
-
-## Either types (domain specific)
-
-What the example would look like
-
-* No generics support as of now.
-* Would a hand-rolled, domain specific one be very hard to write? Maybe it's not as bad as I think.
-* Is that really much different than the `catch` macro from my scheme days?  All that's doing is wrapping.
-
-
-Note: This probably goes against the grain in terms of what is considered idiomatic.
 
 
 ## State machine-ish
