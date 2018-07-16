@@ -5,22 +5,39 @@ date:   2018-07-15 15:49:00 -0500
 categories: go errors
 ---
 
-When you're learning how to be productive in a new programming language, it's easy to make the mistake of trying to make the new language behave more like another language that you're more familiar with.  You can quickly fall into a trap of assuming that your experiences in previous languages have taught you everything you need to know about a particular topic and that - if you're having trouble expressing an idea in a new language - it must be the fault of the language's creators.  This line of reasoning can lead you to using the language's syntax and standard libraries in ways that are not considered idiomatic in that language.  
+When you're learning another language, there can be periods of frustration where you're having trouble expressing an idea that would have been easier in a more familiar language.  It's natural to wonder why the new language was designed that way, and it's easy to get fooled into thinking that - if you're having trouble expressing an idea in a language - it must be the fault of the language's creators.  This line of reasoning can lead you to using the new language in ways that are not idiomatic for that language.
 
-One such topic that has challenged my own conceptions in programming is how errors are represented, triggered, and handled in Go.  This topic appears on the [Go FAQ][golang-faq-errors], and a lot has been written on this topic.  To recap:
+One such topic that has challenged my own conceptions is how errors are represented, triggered, and handled in Go.  To recap:
 
 * An error in Go is any type that implements the [`error` interface][golang-error-type], by providing an `Error() string` method.
-* A function indicates an error has occurred by returning a value of this type.  Errors are distinguished from normal return values by using [multiple return values][golang-multiple-return-values].
-* Errors are handled by checking the return value and propagated to higher layers of abstraction through simple returns (perhaps with an embellishment that adds more context to the error message).
+* A function returns an `error` just like it returns any other value.  [Multiple return values][golang-multiple-return-values] are used to distinguish errors from the function's normal return value.
+* Errors are handled by checking the value(s) returned from a function and propagated to higher layers of abstraction through simple returns (perhaps with an embellishment that adds more details to the error message).
 
-Depending upon your past experiences, you may be inclined to think:
+For example, consider a function that resolves a host address and starts listening for TCP connections.  There are two things that can go wrong, so there are two error checks:
 
-* Go should [implement some form of exception handling][morgan-go-error-handling] that allows you to write `try/catch` to group error-generating code and distinguish it from error-handling code.  _If only Go's creators had written more Java and C#, they might have thought of this._
-* Go should [implement some form of pattern matching][yager-go-is-not-good] that offers a concise way to wrap, unwrap, and propagate errors.  _If only Go's creators understood the power of functional programming, they might have thought of this._
+{% highlight go %}
+func StartListening(host string, port uint16) (net.Listener, error) {
+	address, addressErr := net.ResolveTCPAddr("tcp", fmt.Sprintf("%s:%d", host, port))
+	if addressErr != nil {
+		return nil, fmt.Errorf("StartListening: %s", addressErr)
+	}
 
-However foreign their approach to error handling may be, it's important to realize that this design choice - while unfamiliar to me - was not made arbitrarily and is not getting in the way of many other Gophers.  The burden of inexperience lies with me, not with the language creators.
+	listener, listenError := net.ListenTCP("tcp", address)
+	if listenError != nil {
+		return nil, fmt.Errorf("StartListening: %s", listenError)
+	}
 
-So rather than wish for changes that will are not likely to be implemented any time soon in Go, let's take a look at ways we can write idiomatic Go code using the features and syntax that are already available in the language.
+	return listener, nil
+}
+{% endhighlight %}
+
+
+This topic has its own entry on the [Go FAQ][golang-faq-errors], and the community has offered a wide range of opinions on the matter.  Depending upon your past experiences, you may be inclined to think:
+
+* Go should [implement some form of exception handling][morgan-go-error-handling] that allows you to write `try/catch` blocks to group error-generating code and distinguish it from error-handling code.
+* Go should [implement some form of pattern matching][yager-go-is-not-good] that offers a concise way to wrap errors and apply distinct transformations to values and errors, alike.
+
+While those are useful features in other languages, they are not likely to be implemented anytime soon in Go.  Instead, let's take a look at a few ways that we can write idiomatic Go code today, using the features that are already available.
 
 
 [golang-faq-errors]: https://golang.org/doc/faq#exceptions
@@ -30,12 +47,25 @@ So rather than wish for changes that will are not likely to be implemented any t
 [yager-go-is-not-good]: http://yager.io/programming/go.html
 
 
+## Plain old if statements (make no change)
+
+* Errors are a value.  You handle these values like you would handle any other value.
+* Start with my original request parsing example
+
+
+If you stop reading here and stick to if statements
+
+* you're likely to be writing idiomatic Go code
+* if you have tested and they are passing, you may be able to move on
+* although a bit polarizing, the ability to have working code and move on without getting distracted is valuable
+
+
+
+
 ## Intro
 
 How it works
 
-* Error handling techniques are a bit different
-* important when learning a new language to consider why they made those choices you don't understand, and what you're missing from your own experiences.
 * Errors are a value -- cite the Rob Pike article
 * that means you can handle those values any old way
 * On the plus side, it's harder to ignore an error value than it is to ignore an unchecked exception.
@@ -47,8 +77,6 @@ https://blog.golang.org/errors-are-values
 
 Observations
 
-* this wasn't an arbitrary decision
-* can I find sources for how exceptions break referential integrity?
 * other languages tend towards generic, reusable solutions, but that goes a bit against the Go ethos of doing something simple that works right here and now.  why not just write a for loop?
 
 
@@ -71,19 +99,6 @@ My example code:
 * unclear control flow: 2 failures, one success, one fallback
 * function is kind of long
 * variable scope/lifecycle is a bit inconsistent
-
-
-## Plain old if statements (make no change)
-
-* Errors are a value.  You handle these values like you would handle any other value.
-* Start with my original request parsing example
-
-
-If you stop reading here and stick to if statements
-
-* you're likely to be writing idiomatic Go code
-* if you have tested and they are passing, you may be able to move on
-* although a bit polarizing, the ability to have working code and move on without getting distracted is valuable
 
 
 ## Notes from FP in Scala
@@ -187,3 +202,6 @@ https://codeburst.io/behind-continuations-passing-style-practical-examples-in-go
 * I can use a state machine when I really want to, but it's usually more verbose than it's worth.
 * I can just live with functions containing multiple points of failure being longer than I prefer.
 * Making my own custom error types really isn't that bad
+
+
+However foreign the Go authors' choices in error handling may seem, it's clear from the various blogs and talks they have given that their design choices were not arbitrary.  I try to remember in cases like this that the burden of inexperience lies with me - not with the language creators - and that I can learn to think of an old problem in new ways.
