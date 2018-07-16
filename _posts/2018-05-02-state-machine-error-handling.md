@@ -39,7 +39,7 @@ func (parser RFC7230RequestParser) parseRequestLine(reader *bufio.Reader) (Reque
 {% endhighlight %}
 
 
-## The Inpiration: Functional Programming
+## The Inspiration: Functional Programming
 
 It's a common practice in functional programming to make a state machine for complex workflows.  The big idea is to **make a function for each state**.  Some of those functions represent logical steps in a workflow, while others represent error states.  You make a transition from one state to the other **simply by calling the function** that represents the desired state.
 
