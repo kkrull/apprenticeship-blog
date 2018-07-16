@@ -21,7 +21,7 @@ categories: go
 * What would wrapper functions look like?  doThirdThing(neededFor3, doSecondThing(neededFor2, doFirstThing(neededFor1)))
   Each function would have to have a guard clause that returns the error right away, if there is already an error
 * Would a domain-specific Promise type look any different?
-* wrapper function to unwrap a suuccessul value or go to an error handler?
+* wrapper function to unwrap a successful value or go to an error handler?
 * True CPS - can the next success/old error/new error function be passed in as a second parameter?
 
 
