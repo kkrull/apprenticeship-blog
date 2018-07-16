@@ -82,8 +82,17 @@ There are a few things I don't like about this method:
 1. What exactly is the scope of `err` anyway?  Normally `:=` prevents you from re-assigning an old variable in single-assignment statements, but the multi-assignment version seems a bit more relaxed.  Is the second `err` re-assigned over the first one, at the same address?  Or is a distinct `err` at a distinct address created, after the first drops out of scope?
 
 
-## First alternative: Do nothing
+## First alternative: Move on
 
+While that version of `parseRequestLine` does bug me, using an `if` guard after each possible error is the idiomatic way of handling errors in Go.  We will explore some other ways to refactor this code, but keep in mind that _this code does what it needs to do without abusing features of the language_.  There is an advantage to Go's sometimes Spartan philosophy: When there is one, clear way to do something, you can accept it and move on (even if you're not thrilled with the standard).
+
+Take Go's [official code format][gofmt] and its stance on [forbidding unused variables and imports][golang-faq-unused], for example.  I may think the code format looks ugly and that there are reasonable exceptions when I would allow an unused variable or import.  But these norms are so thoroughly imbued in tools like `gofmt` and the compiler itself that there's no point in arguing or in deliberating over alternatives.  
+
+The fact that these matters are settled leaves me time to move on to more important problems. 
+
+
+[gofmt]: https://golang.org/cmd/gofmt
+[golang-faq-unused]: https://golang.org/doc/faq#unused_variables_and_imports
 
 
 ## Plain old if statements (make no change)
@@ -131,13 +140,6 @@ Goals
 * understand what techniques are available
 * get past some of the polarization
 * remember - not having your favorite mechanism for error handling does make you think
-
-
-My example code:
-
-* unclear control flow: 2 failures, one success, one fallback
-* function is kind of long
-* variable scope/lifecycle is a bit inconsistent
 
 
 ## Notes from FP in Scala
