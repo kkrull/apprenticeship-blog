@@ -5,13 +5,7 @@ date:   2018-07-15 15:49:00 -0500
 categories: go errors
 ---
 
-## Takeaways
-
-A review of error handling techniques in Go that is more comprehensive and less polarizing than most articles out there.
-
-* Understand a variety of techniques that are available, for error handling in Go.
-* Understand the pros and cons of each technique.
-* More acceptance and moving on with how Go handles errors.
+It's not hard to find articles that are critical of Go's chosen mechanism for representing and handling errors.
 
 
 ## Intro
@@ -19,6 +13,7 @@ A review of error handling techniques in Go that is more comprehensive and less 
 How it works
 
 * Error handling techniques are a bit different
+* important when learning a new language to consider why they made those choices you don't understand, and what you're missing from your own experiences.
 * Errors are a value -- cite the Rob Pike article
 * that means you can handle those values any old way
 * On the plus side, it's harder to ignore an error value than it is to ignore an unchecked exception.
@@ -32,6 +27,7 @@ Observations
 
 * this wasn't an arbitrary decision
 * can I find sources for how exceptions break referential integrity?
+* other languages tend towards generic, reusable solutions, but that goes a bit against the Go ethos of doing something simple that works right here and now.  why not just write a for loop?
 
 
 General advice
@@ -76,7 +72,9 @@ Try/catch is commonly desired:
 
 * A lot of people want to see try/catch
 * Worth noting that other techniques are available
-* Breaks referential integrity (research Scala/Odersky)
+* Breaks referential integrity (research Scala/Odersky) -- https://stackoverflow.com/a/28993780
+  https://livebook.manning.com/#!/book/functional-programming-in-scala/chapter-4/1
+  https://github.com/fpinscala/fpinscala/blob/master/exercises/src/main/scala/fpinscala/errorhandling/Option.scala
 * or, cite the article pointing out the hard-to-distinguish correct vs. incorrect code with try/catch
 
 

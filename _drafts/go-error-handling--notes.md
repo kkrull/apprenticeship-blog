@@ -6,6 +6,15 @@ categories: go
 ---
 
 
+## Takeaways
+
+A review of error handling techniques in Go that is more comprehensive and less polarizing than most articles out there.
+
+* Understand a variety of techniques that are available, for error handling in Go.
+* Understand the pros and cons of each technique.
+* More acceptance and moving on with how Go handles errors.
+
+
 ## Go error handling
 
 * golang anti-pattern: use `panic`.
@@ -23,6 +32,10 @@ categories: go
 * Would a domain-specific Promise type look any different?
 * wrapper function to unwrap a successful value or go to an error handler?
 * True CPS - can the next success/old error/new error function be passed in as a second parameter?
+
+
+A good, general description of ways of handling in various languages:
+http://joeduffyblog.com/2016/02/07/the-error-model/
 
 
 ### What have I learned since my recent writings?
