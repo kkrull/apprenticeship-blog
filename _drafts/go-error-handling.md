@@ -47,6 +47,45 @@ While those are useful features in other languages, they are not likely to be im
 [yager-go-is-not-good]: http://yager.io/programming/go.html
 
 
+## A longer example
+
+There's not much I would change in the prior example to make it shorter or simpler, but the notion of putting an `if` statement after each function call starts to feel like it's getting out of hand in larger examples like this:
+
+{% highlight go %}
+func (router RequestRouter) parseRequestLine(reader *bufio.Reader) (ok Request, err Response) {
+	requestLineText, err := readCRLFLine(reader)
+	if err != nil {
+		//No input, or it doesn't end in CRLF
+		return nil, err
+	}
+
+	requested, err := parseRequestLine(requestLineText)
+	if err != nil {
+		//Not a well-formed HTTP request line with {method, target, version}
+		return nil, err
+	}
+
+	if request := router.routeRequest(requested); request != nil {
+		//Well-formed request to a known route
+		return request, nil
+	}
+	
+	//Valid request, but no route to handle it
+	return nil, requested.NotImplemented()
+}
+{% endhighlight %}
+
+There are a few things I don't like about this method:
+
+1. The total number of lines in this method suggests that I should extract (and name) some helpers, but that seems like it would be overkill when there are only 3 or 4 steps in the happy path.
+1. The happy path returns from the middle of two error cases, instead of being at the very beginning or the very end.  This makes it hard to read.
+1. What exactly is the scope of `err` anyway?  Normally `:=` prevents you from re-assigning an old variable in single-assignment statements, but the multi-assignment version seems a bit more relaxed.  Is the second `err` re-assigned over the first one, at the same address?  Or is a distinct `err` at a distinct address created, after the first drops out of scope?
+
+
+## First alternative: Do nothing
+
+
+
 ## Plain old if statements (make no change)
 
 * Errors are a value.  You handle these values like you would handle any other value.
