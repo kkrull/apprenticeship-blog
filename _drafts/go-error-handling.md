@@ -82,17 +82,49 @@ There are a few things I don't like about this method:
 1. What exactly is the scope of `err` anyway?  Normally `:=` prevents you from re-assigning an old variable in single-assignment statements, but the multi-assignment version seems a bit more relaxed.  Is the second `err` re-assigned over the first one, at the same address?  Or is a distinct `err` at a distinct address created, after the first drops out of scope?
 
 
-## First alternative: Move on
+## First option: Keep it and move on
 
-While that version of `parseRequestLine` does bug me, using an `if` guard after each possible error is the idiomatic way of handling errors in Go.  We will explore some other ways to refactor this code, but keep in mind that _this code does what it needs to do without abusing features of the language_.  There is an advantage to Go's sometimes Spartan philosophy: When there is one, clear way to do something, you can accept it and move on (even if you're not thrilled with the standard).
+While this version of `parseRequestLine` does bug me, using an `if` guard after each possible error is the idiomatic way of handling errors in Go.  We will explore some other ways to refactor this code, but keep in mind that _this code does what it needs to do without abusing features of the language_.  There is an advantage to Go's sometimes Spartan philosophy: When there is one, clear way to do something, you can accept it and move on (even if you're not thrilled with the standard).
 
-Take Go's [official code format][gofmt] and its stance on [forbidding unused variables and imports][golang-faq-unused], for example.  I may think the code format looks ugly and that there are reasonable exceptions when I would allow an unused variable or import.  But these norms are so thoroughly imbued in tools like `gofmt` and the compiler itself that there's no point in arguing or in deliberating over alternatives.  
+Take Go's [official code format][gofmt] and its stance on [forbidding unused variables and imports][golang-faq-unused], for example.  I may disagree with the way some code is formatted and think that there are reasonable times to allow unused variables, but tools like [`goimports`][goimports] make it easy to follow standards, and the compiler doesn't leave you with much of a choice.  The time that would otherwise be spent deliberating alternatives can now be re-focused on other code that might be more important, when you stop to think about it.
 
-The fact that these matters are settled leaves me time to move on to more important problems. 
+Back to the code in question - we can explore different structures that may improve readability, but the lack of general-purpose, higher-order functions in Go limits our options.  We can experiment with different abstractions, but at the end of the day we're just moving around the `if` statements.
 
 
 [gofmt]: https://golang.org/cmd/gofmt
+[goimports]: https://godoc.org/golang.org/x/tools/cmd/goimports
 [golang-faq-unused]: https://golang.org/doc/faq#unused_variables_and_imports
+
+
+## Non-idiomatic options
+
+Let us briefly consider a few tempting options that are likely to raise eyebrows in the Go community, in all but the rarest of circumstances.
+
+The first is called [Defer, Panic, and Recover][golang-blog-defer-panic-recover], where `panic` and `recover` are used to simulate the effects of `throw` and `catch` in other languages like Java and C#.  There are a few points worth noting here:
+
+* Although the authors do [cite a case where it's used in Go standard libraries][json-decode], note that these details are never exposed to the client.  `panic` is used for specific circumstances, and - outside of this function - is reserved for the truly catastrophic, non-recoverable events (like not being able to allocate memory).
+* The theoretical argument that exceptions break Referential Transparency.  Martin Odersky describes this well in his book [Functional Programming in Scala][fp-in-scala-book].  If you don't have access to the book, his [examples are on GitHub][fp-in-scala-example], and there is a [concise explanation in this answer][stackoverflow-referential-transparency].
+* The practical argument that it can be [difficult to distinguish correct and incorrect exception-based code][chen-harder-to-recognize].
+
+
+[chen-harder-to-recognize]: https://blogs.msdn.microsoft.com/oldnewthing/20050114-00/?p=36693/
+[fp-in-scala-book]: https://www.manning.com/books/functional-programming-in-scala
+[fp-in-scala-example]: https://github.com/fpinscala/fpinscala/blob/master/exercises/src/main/scala/fpinscala/errorhandling/Option.scala
+[golang-blog-defer-panic-recover]: https://blog.golang.org/defer-panic-and-recover
+[json-decode]: https://golang.org/src/encoding/json/decode.go
+[stackoverflow-referential-transparency]: https://stackoverflow.com/a/28993780
+
+
+## Promise-lite?
+
+Back to the code in question, there really isn't a good way in Go to write a general-purpose, higher-order `map` function without also sacrificing type safety.  There may be opportunities to 
+
+https://github.com/chebyrash/promise
+
+* type-safety has been abandoned
+* IMO this is not idiomatic.
+
+
 
 
 ## Plain old if statements (make no change)
@@ -144,10 +176,6 @@ Goals
 
 ## Notes from FP in Scala
 
-s safer and retains referential transparency, and through the use of higher-order functions, we can preserve the primary benefit of exceptions
-
-We can prove that y is not referentially transparent. Recall that any RT expression may be substituted with the value it refers to, and this substitution should preserve program meaning. If we substitute throw new Exception("fail!") for y in x + y, it produces a different result, because the exception will now be raised inside a try block that will catch the exception and return 43:
-
 Another way of understanding RT is that the meaning of RT expressions does not depend on context and may be reasoned about locally, whereas the meaning of non-RT expressions is context-dependent and requires more global reasoning. For instance, the meaning of the RT expression 42 + 5 doesn’t depend on the larger expression it’s embedded in—it’s always and forever equal to 47. But the meaning of the expression throw new Exception("fail") is very context-dependent—as we just demonstrated, it takes on different meanings depending on which try block (if any) it’s nested within.
 
 There are two main problems with exceptions:
@@ -156,20 +184,6 @@ As we just discussed, exceptions break RT and introduce context dependence, movi
 Exceptions are not type-safe. The type of failingFn, Int => Int tells us nothing about the fact that exceptions may occur, and the compiler will certainly not force callers of failingFn to make a decision about how to handle those exceptions. If we forget to check for an exception in failingFn, this won’t be detected until runtime.
 
 Java’s checked exceptions at least force a decision about whether to handle or reraise an error, but they result in significant boilerplate for callers. More importantly, they don’t work for higher-order functions, which can’t possibly be aware of the specific exceptions that could be raised by their arguments. For example, consider the map function we defined for List:
-
-
-## Try/catch (not going to happen)
-
-Defer, Panic, and Recover is an option if used locally.  Its classification of idiomatic is debatable.
-
-Try/catch is commonly desired:
-
-* A lot of people want to see try/catch
-* Worth noting that other techniques are available
-* Breaks referential integrity (research Scala/Odersky) -- https://stackoverflow.com/a/28993780
-  https://livebook.manning.com/#!/book/functional-programming-in-scala/chapter-4/1
-  https://github.com/fpinscala/fpinscala/blob/master/exercises/src/main/scala/fpinscala/errorhandling/Option.scala
-* or, cite the article pointing out the hard-to-distinguish correct vs. incorrect code with try/catch
 
 
 ## First approach - refactor your control flow
@@ -211,14 +225,6 @@ What the example would look like
 
 
 Note: This probably goes against the grain in terms of what is considered idiomatic.
-
-
-## Promise-lite?
-
-https://github.com/chebyrash/promise
-
-* type-safety has been abandoned
-* IMO this is not idiomatic.
 
 
 ## State machine-ish
