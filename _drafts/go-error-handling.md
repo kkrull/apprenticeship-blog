@@ -195,7 +195,7 @@ func (mapper *RequestLineOrResponse) Map(routeRequest func(requested *RequestLin
 }
 {% endhighlight %}
 
-So this approach is either non-idiomatic, impractical, or both.
+So this approach is either non-idiomatic, impractical, or both.  It's a good reminder that - in the Go community - it's often preferable to write code for your specific purposes than to try to make a one-size-fits-all solution.
 
 
 [github-go-promise]: https://github.com/chebyrash/promise
@@ -203,49 +203,14 @@ So this approach is either non-idiomatic, impractical, or both.
 [scala-either]: https://www.scala-lang.org/api/2.9.3/scala/Either.html
 
 
-## Back to Refactoring
+## Back to basics
 
-How it works
-
-* Errors are a value -- cite the Rob Pike article
-* that means you can handle those values any old way
-* On the plus side, it's harder to ignore an error value than it is to ignore an unchecked exception.
-
-https://blog.golang.org/errors-are-values
+Let's remember a few essential points with how this all works in Go: You can't unknowingly ignore an error returned from a function, and [errors are plain values][robpike-errors-are-values]:
 
 > The key lesson, however, is that errors are values and the full power of the Go programming language is available for processing them.
 
 
-Observations
-
-* other languages tend towards generic, reusable solutions, but that goes a bit against the Go ethos of doing something simple that works right here and now.  why not just write a for loop?
-
-
-General advice
-
-* You should either handle an error, or not handle it but delegate it to a higher level (to the caller). Handling the error and returning it is bad practice as if the caller also does the same, the error might get handled several times.
-* Handle it and don't return it to the caller, or return it to the caller.  Knew that already.  Works fine for multiple layers of abstraction.
-* Guiding observation: There's no getting around the guard clauses, is there?  The only thing I can do is organize them differently.
-
-
-Goals
-
-* understand what techniques are available
-* get past some of the polarization
-* remember - not having your favorite mechanism for error handling does make you think
-
-
-## Plain old if statements (make no change)
-
-* Errors are a value.  You handle these values like you would handle any other value.
-* Start with my original request parsing example
-
-
-If you stop reading here and stick to if statements
-
-* you're likely to be writing idiomatic Go code
-* if you have tested and they are passing, you may be able to move on
-* although a bit polarizing, the ability to have working code and move on without getting distracted is valuable
+[robpike-errors-are-values]: https://blog.golang.org/errors-are-values
 
 
 ## First approach - refactor your control flow
