@@ -5,7 +5,29 @@ date:   2018-07-15 15:49:00 -0500
 categories: go errors
 ---
 
-It's not hard to find articles that are critical of Go's chosen mechanism for representing and handling errors.
+When you're learning how to be productive in a new programming language, it's easy to make the mistake of trying to make the new language behave more like another language that you're more familiar with.  You can quickly fall into a trap of assuming that your experiences in previous languages have taught you everything you need to know about a particular topic and that - if you're having trouble expressing an idea in a new language - it must be the fault of the language's creators.  This line of reasoning can lead you to using the language's syntax and standard libraries in ways that are not considered idiomatic in that language.  
+
+One such topic that has challenged my own conceptions in programming is how errors are represented, triggered, and handled in Go.  This topic appears on the [Go FAQ][golang-faq-errors], and a lot has been written on this topic.  To recap:
+
+* An error in Go is any type that implements the [`error` interface][golang-error-type], by providing an `Error() string` method.
+* A function indicates an error has occurred by returning a value of this type.  Errors are distinguished from normal return values by using [multiple return values][golang-multiple-return-values].
+* Errors are handled by checking the return value and propagated to higher layers of abstraction through simple returns (perhaps with an embellishment that adds more context to the error message).
+
+Depending upon your past experiences, you may be inclined to think:
+
+* Go should [implement some form of exception handling][morgan-go-error-handling] that allows you to write `try/catch` to group error-generating code and distinguish it from error-handling code.  _If only Go's creators had written more Java and C#, they might have thought of this._
+* Go should [implement some form of pattern matching][yager-go-is-not-good] that offers a concise way to wrap, unwrap, and propagate errors.  _If only Go's creators understood the power of functional programming, they might have thought of this._
+
+However foreign their approach to error handling may be, it's important to realize that this design choice - while unfamiliar to me - was not made arbitrarily and is not getting in the way of many other Gophers.  The burden of inexperience lies with me, not with the language creators.
+
+So rather than wish for changes that will are not likely to be implemented any time soon in Go, let's take a look at ways we can write idiomatic Go code using the features and syntax that are already available in the language.
+
+
+[golang-faq-errors]: https://golang.org/doc/faq#exceptions
+[golang-error-type]: https://golang.org/pkg/builtin/#error
+[golang-multiple-return-values]: https://golang.org/doc/effective_go.html#multiple-returns
+[morgan-go-error-handling]: https://opencredo.com/why-i-dont-like-error-handling-in-go/
+[yager-go-is-not-good]: http://yager.io/programming/go.html
 
 
 ## Intro
@@ -62,6 +84,22 @@ If you stop reading here and stick to if statements
 * you're likely to be writing idiomatic Go code
 * if you have tested and they are passing, you may be able to move on
 * although a bit polarizing, the ability to have working code and move on without getting distracted is valuable
+
+
+## Notes from FP in Scala
+
+s safer and retains referential transparency, and through the use of higher-order functions, we can preserve the primary benefit of exceptions
+
+We can prove that y is not referentially transparent. Recall that any RT expression may be substituted with the value it refers to, and this substitution should preserve program meaning. If we substitute throw new Exception("fail!") for y in x + y, it produces a different result, because the exception will now be raised inside a try block that will catch the exception and return 43:
+
+Another way of understanding RT is that the meaning of RT expressions does not depend on context and may be reasoned about locally, whereas the meaning of non-RT expressions is context-dependent and requires more global reasoning. For instance, the meaning of the RT expression 42 + 5 doesn’t depend on the larger expression it’s embedded in—it’s always and forever equal to 47. But the meaning of the expression throw new Exception("fail") is very context-dependent—as we just demonstrated, it takes on different meanings depending on which try block (if any) it’s nested within.
+
+There are two main problems with exceptions:
+
+As we just discussed, exceptions break RT and introduce context dependence, moving us away from the simple reasoning of the substitution model and making it possible to write confusing exception-based code. This is the source of the folklore advice that exceptions should be used only for error handling, not for control flow.
+Exceptions are not type-safe. The type of failingFn, Int => Int tells us nothing about the fact that exceptions may occur, and the compiler will certainly not force callers of failingFn to make a decision about how to handle those exceptions. If we forget to check for an exception in failingFn, this won’t be detected until runtime.
+
+Java’s checked exceptions at least force a decision about whether to handle or reraise an error, but they result in significant boilerplate for callers. More importantly, they don’t work for higher-order functions, which can’t possibly be aware of the specific exceptions that could be raised by their arguments. For example, consider the map function we defined for List:
 
 
 ## Try/catch (not going to happen)
