@@ -229,6 +229,46 @@ The other bit of good news is that you can't unknowingly ignore a returned error
 [robpike-errors-are-values]: https://blog.golang.org/errors-are-values
 
 
+### Refactor your workflow
+
+Looking back at the example code, there are 2 definite errors (input not ending in CRLF and not-well-formed CRLF lines), 1 clearly successful response, and 1 default response.
+
+Why don't we just group those together with some more functions?
+
+{% highlight go %}
+func (router RequestLineRouter) parseRequestLine(reader *bufio.Reader) (Request, Response) {
+	requested, err := readRequestLine(reader)
+	if err != nil {
+		//No input, not ending in CRLF, or not a well-formed request
+		return nil, err
+	}
+
+	return router.routedRequestOrNotImplemented(requested)
+}
+
+func readRequestLine(reader *bufio.Reader) (*RequestLine, Response) {
+	requestLineText, err := readCRLFLine(reader)
+	if err == nil {
+		return parseRequestLine(requestLineText)
+	} else {
+		return nil, err
+	}
+}
+
+func (router RequestLineRouter) routedRequestOrNotImplemented(requested *RequestLine) (Request, Response) {
+	if request := router.routeRequest(requested); request != nil {
+		//Well-formed, executable Request to a known route
+		return request, nil
+	}
+
+	//Valid request, but no route to handle it
+	return nil, requested.NotImplemented()
+}
+{% endhighlight %}
+
+Here, we're back to using plain old Go code.  We get the benefit of a smaller `parseRequestLine` at the cost of a couple of helpers functions.  You get to decide which end of the trade-off works for you: more functions that are smaller, or fewer functions that are a bit larger?
+
+
 ## First approach - refactor your control flow
 
 Function call wrapping: I could have refactored it to
