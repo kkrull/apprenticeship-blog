@@ -5,13 +5,13 @@ date:   2018-07-17 09:49:00 -0500
 categories: go errors
 ---
 
-When you're learning another language, there can be periods of frustration where you're having trouble expressing an idea that would have been easier in a more familiar language.  It's natural to wonder why the new language was designed that way, and it's easy to get fooled into thinking that — if you're having trouble expressing an idea in a language — it must be the fault of the language's authors.  This line of reasoning can lead you to using the new language in ways that are not idiomatic for that language.
+When you're learning another language, there can be periods of frustration where you're having trouble expressing an idea that would have been easier in a more familiar language.  It's natural to wonder why the new language was designed that way, and it's easy to get fooled into thinking that — if you're having trouble expressing an idea in a language — it must be the fault of the language's authors.  This line of reasoning can lead you to using a language in ways that are not idiomatic for that language.
 
-One such topic that has challenged my own conceptions is how errors are represented, triggered, and handled in Go.  To recap:
+One such topic that has challenged my own conceptions is how errors are handled in Go.  To recap:
 
-* An error in Go is any type that implements the [`error` interface][golang-error-type], by providing an `Error() string` method.
-* A function returns an `error` just like it returns any other value.  [Multiple return values][golang-multiple-return-values] are used to distinguish errors from the function's normal return value.
-* Errors are handled by checking the value(s) returned from a function and propagated to higher layers of abstraction through simple returns (perhaps with an embellishment that adds more details to the error message).
+* An error in Go is any type implementing the [`error` interface][golang-error-type] with an `Error() string` method.
+* Functions return `error`s just like any other value.  [Multiple return values][golang-multiple-return-values] distinguish errors from normal return values.
+* Errors are handled by checking the value(s) returned from a function and propagated to higher layers of abstraction through simple returns (perhaps adding details to the error message).
 
 For example, consider a function that resolves a host address and starts listening for TCP connections.  There are two things that can go wrong, so there are two error checks:
 
@@ -49,7 +49,7 @@ While those are useful features in other languages, they are not likely to be im
 
 ## A longer example
 
-There may not be much to change in the prior example to make it shorter or simpler, but the notion of putting an `if` statement after each function call starts to feel like it's getting out of hand in larger examples like this:
+There may not be much to change in the prior example to make it shorter or simpler, but writing an `if` statement after each function call can start to feel like it's getting out of hand:
 
 {% highlight go %}
 func (router HttpRouter) parse(reader *bufio.Reader) (Request, Response) {
@@ -78,19 +78,19 @@ func (router HttpRouter) parse(reader *bufio.Reader) (Request, Response) {
 There are a few things to be desired in this method:
 
 1. The total number of lines in this method suggests that some helper functions [could be extracted][extract-till-you-drop].
-1. The happy path returns from the middle of two error cases, instead of being at the very beginning or the very end.  This makes it hard to read.
-1. What exactly is the scope of `err` anyway?  Normally `:=` prevents you from re-assigning an old variable in single-assignment statements, but the multi-assignment version seems a bit more relaxed.  Is the second `err` re-assigned over the first one, at the same address?  Or is a distinct `err` at a distinct address created, after the first drops out of scope?
+1. Returning a successful value from the middle of two error cases makes it hard to read.
+1. It's not clear if the second `err` is a new variable at a new address, or re-assignment of the first one.  It's not entirely consistent the single-variable form of `:=`, which forbids re-assignment.
 
 [extract-till-you-drop]: https://sites.google.com/site/unclebobconsultingllc/one-thing-extract-till-you-drop
 
 
 ## First option: Keep it and move on
 
-While this version of `parseRequestLine` does bug me, using an `if` guard after each possible error is the idiomatic way of handling errors in Go.  We will explore some other ways to refactor this code, but keep in mind that _this code does what it needs to do without abusing features of the language_.  There is an advantage to Go's sometimes Spartan philosophy: When there is one, clear way to do something, you can accept it and move on (even if you're not thrilled with the standard).
+While this version of `parse` does bug me, using an `if` guard after each possible error is the idiomatic way of handling errors in Go.  We will explore some other ways to refactor this code, but keep in mind that _this code does what it needs to do without abusing features of the language_.  There is an advantage to Go's sometimes Spartan philosophy: When there is one, clear way to do something, you can accept it and move on (even if you're not thrilled with the standard).
 
 Take Go's [official code format][gofmt] and its stance on [forbidding unused variables and imports][golang-faq-unused], for example.  I may disagree with the way some code is formatted and think that there are reasonable times to allow unused variables, but tools like [`goimports`][goimports] make it easy to follow standards, and the compiler doesn't leave you with much of a choice.  The time that would otherwise be spent deliberating alternatives can now be re-focused on other code that might be more important.
 
-Back to the code in question — we can explore different structures that may clarify its control flow, but the lack of general-purpose, higher-order functions in Go limits our options.  We can experiment with different abstractions, but at the end of the day we're just moving around the `if` statements.
+Back to the code in question — we can explore different structures that may clarify its control flow, but the lack of general-purpose, higher-order functions in Go limits our options.
 
 
 [gofmt]: https://golang.org/cmd/gofmt
@@ -100,15 +100,15 @@ Back to the code in question — we can explore different structures that may cl
 
 ## Non-idiomatic options
 
-You may be familiar with other approaches to error handling and control flow that are used in other languages, and it can be tempting to try to apply your favorite technique to Go.  Let us briefly consider a few tempting options that are likely to raise eyebrows in the Go community, in all but the rarest of circumstances.
+You may be familiar with other approaches to control flow that are used in other languages, and it can be tempting to try to apply your favorite technique to Go.  Let us briefly consider a few tempting options that are likely to raise eyebrows in the Go community, in all but the rarest of circumstances.
 
 
 ### Defer, Panic, Recover
 
-The first is called [Defer, Panic, and Recover][golang-blog-defer-panic-recover], where `panic` and `recover` are used to simulate the effects of `throw` and `catch` in other languages like Java and C#.  There are a few points worth noting here:
+The first is called [Defer, Panic, and Recover][golang-blog-defer-panic-recover], where `panic` and `recover` are used sort of like `throw` and `catch` in other languages.  There are a few points worth noting here:
 
 * The Go authors do [cite a case where it's used in Go standard libraries][json-decode], but they have also been careful to keep panics from escaping to the outside world.  In most cases, `panic` is reserved for truly catastrophic errors (much like the [`Error` class in Java][java-error] is used for non-recoverable errors).
-* The theoretical argument that exceptions break Referential Transparency: Martin Odersky describes this well in his book [Functional Programming in Scala][fp-in-scala-book].  To sum it up: code that can throw an exception can evaluate to different values depending on whether or not it is surrounded in a `try/catch` block, so the programmer has to be aware of more, global context.  There's a nice [example of this on GitHub][fp-in-scala-example] and a [concise explanation in this answer][stackoverflow-referential-transparency].
+* The theoretical argument that exceptions break Referential Transparency: Martin Odersky describes this well in his book [Functional Programming in Scala][fp-in-scala-book].  To sum it up: code that can throw an exception can evaluate to different values depending on whether or not it is surrounded in a `try/catch` block, so the programmer has to be aware of global context in order to avoid bugs.  There's a nice [example of this on GitHub][fp-in-scala-example] and a [concise explanation in this answer][stackoverflow-referential-transparency].
 * The practical argument: It's [difficult to distinguish correct and incorrect exception-based code][chen-harder-to-recognize].
 
 The Go authors tend to make distinctions between expected branches in control flow (valid and invalid input, for example) and large-scale events that threaten the process as a whole.  If you are to remain in the good graces of the Go community, you should make an effort to reserve `panic` for the latter.
@@ -147,7 +147,7 @@ func mapFn(value any, mapper func(any) any) any {
 }
 {% endhighlight %}
 
-There are options that abandon type safety, like [this Go Promise library][github-go-promise].  However, take a close look at how the example code carefully sidestep the issue of type safety by using the output value in a function — `fmt.Println` — that doesn't care about its type.
+There are options that abandon type safety, like [this Go Promise library][github-go-promise].  However, take a close look at how the example code carefully sidesteps the issue of type safety by using the output value in a function that accepts any type (`fmt.Println` does ultimately use reflection to type its argument).
 
 {% highlight go %}
 var p = promise.New(...)
@@ -238,7 +238,7 @@ The other bit of good news is that you can't unknowingly ignore a returned error
 
 ### Function grouping
 
-Looking back at the example code, there are 2 definite errors (input not ending in CRLF and not-well-formed CRLF lines), 1 clearly successful response, and 1 default response.
+Looking back at the example code, there are 2 definite errors (input not ending in CRLF and not-well-formed HTTP request lines), 1 clearly successful response, and 1 default response.
 
 Why don't we just group those cases together?
 
@@ -273,12 +273,12 @@ func (router HttpRouter) requestOr501(line *RequestLine) (Request, Response) {
 }
 {% endhighlight %}
 
-Here we get the benefit of a smaller `parseRequestLine` at the cost of a couple of extra functions.  You get to decide which end of the trade-off works for you: more functions that are smaller, or fewer functions that are a bit larger?
+Here we get the benefit of a smaller `parse` at the cost of a couple of extra functions.  You get to decide whether you prefer _more_ functions, or _larger_ functions.
 
 
 ### Happy- and sad-paths in parallel
 
-Another approach could be to refactor the existing functions to handle happy and sad paths, at the same time.  Multiple values can be passed from one function to another.
+One could also refactor the existing functions to handle happy and sad paths at the same time.
 
 {% highlight go %}
 func (router HttpRouter) parse(reader *bufio.Reader) (Request, Response) {
@@ -326,12 +326,12 @@ func (router HttpRouter) route(line *RequestLine, prevErr Response) (Request, Re
 }
 {% endhighlight %}
 
-Instead of 4 `if` guards in the original example, we're down to 3 without adding any more functions.  The trade-off is having to read the higher-level `parseRequestLine` inside-out.
+Instead of 4 `if` guards in the original example, we're down to 3 without adding any more functions.  The trade-off is having to read the top-level `parse` inside-out.
 
 
 ### Closure for errors
 
-It's worth noting another approach, which is simply to [create a closure][pike-error-closure] over the first error.  The example code in the cited article starts like this:
+You can also create a closure over the first error.  The example code [from the article][pike-error-closure] starts like so:
 
 {% highlight go %}
 _, err = fd.Write(p0[a:b])
@@ -368,7 +368,7 @@ if err != nil {
 
 This approach works well when you can pass each step in your workflow to the closure, which suggests that each step should operate on the same types.  In some cases, this can work great.
 
-In the example I've been using in this blog, you would have to create a `struct` to close over the error and write a separate application function for each step in the workflow.  In this case, I think it would add more complexity than it removes.
+In the example in this blog, you would have to create a `struct` to close over the error and write separate `applyParseText` / `applyParseRequest` / `applyRoute` functions for each step in the workflow, which is probably more trouble than it's worth.
 
 
 [pike-error-closure]: https://blog.golang.org/errors-are-values
