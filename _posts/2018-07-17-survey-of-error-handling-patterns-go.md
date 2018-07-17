@@ -1,11 +1,11 @@
 ---
 layout: post
-title:  "A Survey of Error Handling Patterns in Go"
+title:  "Exploring Error Handling Patterns in Go"
 date:   2018-07-17 09:49:00 -0500
 categories: go errors
 ---
 
-When you're learning another language, there can be periods of frustration where you're having trouble expressing an idea that would have been easier in a more familiar language.  It's natural to wonder why the new language was designed that way, and it's easy to get fooled into thinking that — if you're having trouble expressing an idea in a language — it must be the fault of the language's creators.  This line of reasoning can lead you to using the new language in ways that are not idiomatic for that language.
+When you're learning another language, there can be periods of frustration where you're having trouble expressing an idea that would have been easier in a more familiar language.  It's natural to wonder why the new language was designed that way, and it's easy to get fooled into thinking that — if you're having trouble expressing an idea in a language — it must be the fault of the language's authors.  This line of reasoning can lead you to using the new language in ways that are not idiomatic for that language.
 
 One such topic that has challenged my own conceptions is how errors are represented, triggered, and handled in Go.  To recap:
 
@@ -16,15 +16,15 @@ One such topic that has challenged my own conceptions is how errors are represen
 For example, consider a function that resolves a host address and starts listening for TCP connections.  There are two things that can go wrong, so there are two error checks:
 
 {% highlight go %}
-func StartListening(host string, port uint16) (net.Listener, error) {
-	address, addressErr := net.ResolveTCPAddr("tcp", fmt.Sprintf("%s:%d", host, port))
-	if addressErr != nil {
-		return nil, fmt.Errorf("StartListening: %s", addressErr)
+func Listen(host string, port uint16) (net.Listener, error) {
+	addr, addrErr := net.ResolveTCPAddr("tcp", fmt.Sprintf("%s:%d", host, port))
+	if addrErr != nil {
+		return nil, fmt.Errorf("Listen: %s", addrErr)
 	}
 
-	listener, listenError := net.ListenTCP("tcp", address)
+	listener, listenError := net.ListenTCP("tcp", addr)
 	if listenError != nil {
-		return nil, fmt.Errorf("StartListening: %s", listenError)
+		return nil, fmt.Errorf("Listen: %s", listenError)
 	}
 
 	return listener, nil
@@ -49,37 +49,39 @@ While those are useful features in other languages, they are not likely to be im
 
 ## A longer example
 
-There's not much I would change in the prior example to make it shorter or simpler, but the notion of putting an `if` statement after each function call starts to feel like it's getting out of hand in larger examples like this:
+There may not be much to change in the prior example to make it shorter or simpler, but the notion of putting an `if` statement after each function call starts to feel like it's getting out of hand in larger examples like this:
 
 {% highlight go %}
-func (router RequestLineRouter) parseRequestLine(reader *bufio.Reader) (Request, Response) {
-	requestLineText, err := readCRLFLine(reader) //(line string, err Response)
+func (router HttpRouter) parse(reader *bufio.Reader) (Request, Response) {
+	requestText, err := readCRLFLine(reader) //string, err Response
 	if err != nil {
 		//No input, or it doesn't end in CRLF
 		return nil, err
 	}
 
-	requested, err := parseRequestLine(requestLineText) //(RequestLine, err Response)
+	requestLine, err := parseRequestLine(requestText) //RequestLine, err Response
 	if err != nil {
 		//Not a well-formed HTTP request line with {method, target, version}
 		return nil, err
 	}
 
-	if request := router.routeRequest(requested); request != nil {
+	if request := router.routeRequest(requestLine); request != nil {
 		//Well-formed, executable Request to a known route
 		return request, nil
 	}
 
 	//Valid request, but no route to handle it
-	return nil, requested.NotImplemented()
+	return nil, requestLine.NotImplemented()
 }
 {% endhighlight %}
 
-There are a few things I don't like about this method:
+There are a few things to be desired in this method:
 
-1. The total number of lines in this method suggests that I should extract (and name) some helpers, but that seems like it would be overkill when there are only 3 or 4 steps in the happy path.
+1. The total number of lines in this method suggests that some helper functions [could be extracted][extract-till-you-drop].
 1. The happy path returns from the middle of two error cases, instead of being at the very beginning or the very end.  This makes it hard to read.
 1. What exactly is the scope of `err` anyway?  Normally `:=` prevents you from re-assigning an old variable in single-assignment statements, but the multi-assignment version seems a bit more relaxed.  Is the second `err` re-assigned over the first one, at the same address?  Or is a distinct `err` at a distinct address created, after the first drops out of scope?
+
+[extract-till-you-drop]: https://sites.google.com/site/unclebobconsultingllc/one-thing-extract-till-you-drop
 
 
 ## First option: Keep it and move on
@@ -139,7 +141,10 @@ func mapIntToInt(value int, func(int) int) int { ... }
 func mapStringToInt(value string, func(string) int) int { ... }
 
 // ...but how does this help?
-func map(value interface{}, mapper func(interface{}) interface{}) interface{} { ... }
+type any interface{}
+func mapFn(value any, mapper func(any) any) any {
+	return mapper(value)
+}
 {% endhighlight %}
 
 There are options that abandon type safety, like [this Go Promise library][github-go-promise].  However, take a close look at how the example code carefully sidestep the issue of type safety by using the output value in a function — `fmt.Println` — that doesn't care about its type.
@@ -154,7 +159,7 @@ p.Then(func(data interface{}) {
 Making a wrapper like Scala's [`Either` type][scala-either] doesn't really solve the problem either, because it would need to have type-safe functions to transform happy- and sad-path values.  It would be nice to be able to write the example function a bit more like this:
 
 {% highlight go %}
-func (router RequestLineRouter) parseRequestLine(reader *bufio.Reader) (Request, Response) {
+func (router HttpRouter) parse(reader *bufio.Reader) (Request, Response) {
 	request, response := newStringOrResponse(readCRLFLine(reader)).
 		Map(parseRequestLine).
 		Map(router.routeRequest)
@@ -182,14 +187,15 @@ type StringOrResponse struct {
 	err Response
 }
 
-func (mapper *StringOrResponse) Map(makeRequestLine func(text string) (*RequestLine, Response)) *RequestLineOrResponse {
-	if mapper.err != nil {
-		return &RequestLineOrResponse{data: nil, err: mapper.err}
+type ParseRequestLine func(text string) (*RequestLine, Response)
+func (either *StringOrResponse) Map(parse ParseRequestLine) *RequestLineOrResponse {
+	if either.err != nil {
+		return &RequestLineOrResponse{data: nil, err: either.err}
 	}
 
-	requestLine, err := makeRequestLine(mapper.data)
+	requestLine, err := parse(either.data)
 	if err != nil {
-		return &RequestLineOrResponse{data: nil, err: mapper.err}
+		return &RequestLineOrResponse{data: nil, err: either.err}
 	}
 
 	return &RequestLineOrResponse{data: requestLine, err: nil}
@@ -200,12 +206,13 @@ type RequestLineOrResponse struct {
 	err Response
 }
 
-func (mapper *RequestLineOrResponse) Map(routeRequest func(requested *RequestLine) Request) (Request, Response) {
-	if mapper.err != nil {
-		return nil, mapper.err
+type RouteRequest func(requested *RequestLine) Request
+func (either *RequestLineOrResponse) Map(route RouteRequest) (Request, Response) {
+	if either.err != nil {
+		return nil, either.err
 	}
 
-	return routeRequest(mapper.data), nil
+	return route(either.data), nil
 }
 {% endhighlight %}
 
@@ -236,14 +243,14 @@ Looking back at the example code, there are 2 definite errors (input not ending 
 Why don't we just group those cases together?
 
 {% highlight go %}
-func (router RequestLineRouter) parseRequestLine(reader *bufio.Reader) (Request, Response) {
+func (router HttpRouter) parse(reader *bufio.Reader) (Request, Response) {
 	requested, err := readRequestLine(reader)
 	if err != nil {
 		//No input, not ending in CRLF, or not a well-formed request
 		return nil, err
 	}
 
-	return router.routedRequestOrNotImplemented(requested)
+	return router.requestOr501(requested)
 }
 
 func readRequestLine(reader *bufio.Reader) (*RequestLine, Response) {
@@ -255,14 +262,14 @@ func readRequestLine(reader *bufio.Reader) (*RequestLine, Response) {
 	}
 }
 
-func (router RequestLineRouter) routedRequestOrNotImplemented(requested *RequestLine) (Request, Response) {
-	if request := router.routeRequest(requested); request != nil {
+func (router HttpRouter) requestOr501(line *RequestLine) (Request, Response) {
+	if request := router.routeRequest(line); request != nil {
 		//Well-formed, executable Request to a known route
 		return request, nil
 	}
 
 	//Valid request, but no route to handle it
-	return nil, requested.NotImplemented()
+	return nil, line.NotImplemented()
 }
 {% endhighlight %}
 
@@ -274,22 +281,24 @@ Here we get the benefit of a smaller `parseRequestLine` at the cost of a couple 
 Another approach could be to refactor the existing functions to handle happy and sad paths, at the same time.  Multiple values can be passed from one function to another.
 
 {% highlight go %}
-func (router RequestLineRouter) parseRequestLine(reader *bufio.Reader) (Request, Response) {
-	return router.routeRequest(parseRequestLine(readCRLFLine(reader)))
+func (router HttpRouter) parse(reader *bufio.Reader) (Request, Response) {
+	return router.route(parseRequestLine(readCRLFLine(reader)))
 }
 
 //Same as before
 func readCRLFLine(reader *bufio.Reader) (string, Response) { ... }
 
-func parseRequestLine(text string, priorError Response) (*RequestLine, Response) {
-	if priorError != nil {
-		//No input, or not ending in CRLF
-		return nil, priorError
+func parseRequestLine(text string, prevErr Response) (*RequestLine, Response) {
+	if prevErr != nil {
+		//New
+		return nil, prevErr
 	}
 
 	fields := strings.Split(text, " ")
 	if len(fields) != 3 {
-		return nil, &clienterror.BadRequest{DisplayText: "incorrectly formatted or missing request-line"}
+		return nil, &clienterror.BadRequest{
+			DisplayText: "incorrectly formatted or missing request-line",
+		}
 	}
 
 	return &RequestLine{
@@ -298,14 +307,14 @@ func parseRequestLine(text string, priorError Response) (*RequestLine, Response)
 	}, nil
 }
 
-func (router RequestLineRouter) routeRequest(requested *RequestLine, priorError Response) (Request, Response) {
-	if priorError != nil {
-		//No input, not ending in CRLF, or not well-formed
-		return nil, priorError
+func (router HttpRouter) route(line *RequestLine, prevErr Response) (Request, Response) {
+	if prevErr != nil {
+		//New
+		return nil, prevErr
 	}
 
 	for _, route := range router.routes {
-		request := route.Route(requested)
+		request := route.Route(line)
 		if request != nil {
 			//Valid request to a known route
 			return request, nil
@@ -313,7 +322,7 @@ func (router RequestLineRouter) routeRequest(requested *RequestLine, priorError 
 	}
 
 	//Valid request, but unknown route
-	return nil, &servererror.NotImplemented{Method: requested.Method}
+	return nil, &servererror.NotImplemented{Method: line.Method}
 }
 {% endhighlight %}
 
@@ -367,6 +376,6 @@ In the example I've been using in this blog, you would have to create a `struct`
 
 ## Conclusion
 
-Although Go's design choices in error handling seemed foreign to me at first, it's clear from the various blogs and talks the authors have given that their design choices were not arbitrary.  I try to remember in cases like this that the burden of inexperience lies with me — not with the Go authors — and that I can learn to think of an old problem in new ways.
+Although Go's design choices in error handling may seem foreign at first, it's clear from the various blogs and talks its authors have given that these choices were not arbitrary.  Personally, I try to remember that the burden of inexperience lies with me — not with the Go authors — and that I can learn to think of an old problem in new ways.
 
-When I started writing this article, I thought it might be possible to apply experiences from other, more functional languages to make my Go code simpler.  This experience has been a good reminder to me of what Go authors have been emphasizing all along: sometimes it's better just to write some code for your specific situation and move on.
+When I started writing this article, I thought it might be possible to apply experiences from other, more functional languages to make my Go code simpler.  This experience has been a good reminder to me of what Go authors have been emphasizing all along: sometimes it's helpful to write a few functions specific to your own purposes and move on.
