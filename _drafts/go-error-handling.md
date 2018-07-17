@@ -219,11 +219,13 @@ So the various forms of writing higher-order functions wind up being non-idiomat
 
 ## Back to basics
 
-Let's remember a few essential points with how this all works in Go: You can't unknowingly ignore an error returned from a function, and [errors are plain values][robpike-errors-are-values]:
+Now that we have seen how functional styles are not likely to be helpful, let's [remind ourselves][robpike-errors-are-values]:
 
 > The key lesson, however, is that errors are values and the full power of the Go programming language is available for processing them.
 
+The other bit of good news is that you can't unknowingly ignore a returned error, like you can with an unchecked exception.  The compiler will force you at a minimum to declare the error as `_`, and tools like [`errcheck`][errcheck] do a good job of keeping you honest.
 
+[errcheck]: https://github.com/kisielk/errcheck
 [robpike-errors-are-values]: https://blog.golang.org/errors-are-values
 
 
