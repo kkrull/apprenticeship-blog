@@ -1,11 +1,11 @@
 ---
 layout: post
 title:  "A Survey of Error Handling Patterns in Go"
-date:   2018-07-15 15:49:00 -0500
+date:   2018-07-17 09:49:00 -0500
 categories: go errors
 ---
 
-When you're learning another language, there can be periods of frustration where you're having trouble expressing an idea that would have been easier in a more familiar language.  It's natural to wonder why the new language was designed that way, and it's easy to get fooled into thinking that - if you're having trouble expressing an idea in a language - it must be the fault of the language's creators.  This line of reasoning can lead you to using the new language in ways that are not idiomatic for that language.
+When you're learning another language, there can be periods of frustration where you're having trouble expressing an idea that would have been easier in a more familiar language.  It's natural to wonder why the new language was designed that way, and it's easy to get fooled into thinking that — if you're having trouble expressing an idea in a language — it must be the fault of the language's creators.  This line of reasoning can lead you to using the new language in ways that are not idiomatic for that language.
 
 One such topic that has challenged my own conceptions is how errors are represented, triggered, and handled in Go.  To recap:
 
@@ -88,7 +88,7 @@ While this version of `parseRequestLine` does bug me, using an `if` guard after 
 
 Take Go's [official code format][gofmt] and its stance on [forbidding unused variables and imports][golang-faq-unused], for example.  I may disagree with the way some code is formatted and think that there are reasonable times to allow unused variables, but tools like [`goimports`][goimports] make it easy to follow standards, and the compiler doesn't leave you with much of a choice.  The time that would otherwise be spent deliberating alternatives can now be re-focused on other code that might be more important.
 
-Back to the code in question - we can explore different structures that may clarify its control flow, but the lack of general-purpose, higher-order functions in Go limits our options.  We can experiment with different abstractions, but at the end of the day we're just moving around the `if` statements.
+Back to the code in question — we can explore different structures that may clarify its control flow, but the lack of general-purpose, higher-order functions in Go limits our options.  We can experiment with different abstractions, but at the end of the day we're just moving around the `if` statements.
 
 
 [gofmt]: https://golang.org/cmd/gofmt
@@ -142,7 +142,7 @@ func mapStringToInt(value string, func(string) int) int { ... }
 func map(value interface{}, mapper func(interface{}) interface{}) interface{} { ... }
 {% endhighlight %}
 
-There are options that abandon type safety, like [this Go Promise library][github-go-promise].  However, take a close look at how the example code carefully sidestep the issue of type safety by using the output value in a function - `fmt.Println` - that doesn't care about its type.
+There are options that abandon type safety, like [this Go Promise library][github-go-promise].  However, take a close look at how the example code carefully sidestep the issue of type safety by using the output value in a function — `fmt.Println` — that doesn't care about its type.
 
 {% highlight go %}
 var p = promise.New(...)
@@ -151,7 +151,7 @@ p.Then(func(data interface{}) {
 })
 {% endhighlight %}
 
-Making a a wrapper like Scala's [`Either` type][scala-either] doesn't really solve the problem either, because it would need to have type-safe functions to transform happy- and sad-path values.  It would be nice to be able to write the example function a bit more like this:
+Making a wrapper like Scala's [`Either` type][scala-either] doesn't really solve the problem either, because it would need to have type-safe functions to transform happy- and sad-path values.  It would be nice to be able to write the example function a bit more like this:
 
 {% highlight go %}
 func (router RequestLineRouter) parseRequestLine(reader *bufio.Reader) (Request, Response) {
@@ -367,6 +367,6 @@ In the example I've been using in this blog, you would have to create a `struct`
 
 ## Conclusion
 
-Although Go's design choices in error handling seemed foreign to me at first, it's clear from the various blogs and talks the authors have given that their design choices were not arbitrary.  I try to remember in cases like this that the burden of inexperience lies with me - not with the Go authors - and that I can learn to think of an old problem in new ways.
+Although Go's design choices in error handling seemed foreign to me at first, it's clear from the various blogs and talks the authors have given that their design choices were not arbitrary.  I try to remember in cases like this that the burden of inexperience lies with me — not with the Go authors — and that I can learn to think of an old problem in new ways.
 
 When I started writing this article, I thought it might be possible to apply experiences from other, more functional languages to make my Go code simpler.  This experience has been a good reminder to me of what Go authors have been emphasizing all along: sometimes it's better just to write some code for your specific situation and move on.
