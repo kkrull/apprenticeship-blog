@@ -52,24 +52,24 @@ While those are useful features in other languages, they are not likely to be im
 There's not much I would change in the prior example to make it shorter or simpler, but the notion of putting an `if` statement after each function call starts to feel like it's getting out of hand in larger examples like this:
 
 {% highlight go %}
-func (router RequestRouter) parseRequestLine(reader *bufio.Reader) (ok Request, err Response) {
-	requestLineText, err := readCRLFLine(reader)
+func (router RequestLineRouter) parseRequestLine(reader *bufio.Reader) (Request, Response) {
+	requestLineText, err := readCRLFLine(reader) //(line string, err Response)
 	if err != nil {
 		//No input, or it doesn't end in CRLF
 		return nil, err
 	}
 
-	requested, err := parseRequestLine(requestLineText)
+	requested, err := parseRequestLine(requestLineText) //(RequestLine, err Response)
 	if err != nil {
 		//Not a well-formed HTTP request line with {method, target, version}
 		return nil, err
 	}
 
 	if request := router.routeRequest(requested); request != nil {
-		//Well-formed request to a known route
+		//Well-formed, executable Request to a known route
 		return request, nil
 	}
-	
+
 	//Valid request, but no route to handle it
 	return nil, requested.NotImplemented()
 }
@@ -86,9 +86,9 @@ There are a few things I don't like about this method:
 
 While this version of `parseRequestLine` does bug me, using an `if` guard after each possible error is the idiomatic way of handling errors in Go.  We will explore some other ways to refactor this code, but keep in mind that _this code does what it needs to do without abusing features of the language_.  There is an advantage to Go's sometimes Spartan philosophy: When there is one, clear way to do something, you can accept it and move on (even if you're not thrilled with the standard).
 
-Take Go's [official code format][gofmt] and its stance on [forbidding unused variables and imports][golang-faq-unused], for example.  I may disagree with the way some code is formatted and think that there are reasonable times to allow unused variables, but tools like [`goimports`][goimports] make it easy to follow standards, and the compiler doesn't leave you with much of a choice.  The time that would otherwise be spent deliberating alternatives can now be re-focused on other code that might be more important, when you stop to think about it.
+Take Go's [official code format][gofmt] and its stance on [forbidding unused variables and imports][golang-faq-unused], for example.  I may disagree with the way some code is formatted and think that there are reasonable times to allow unused variables, but tools like [`goimports`][goimports] make it easy to follow standards, and the compiler doesn't leave you with much of a choice.  The time that would otherwise be spent deliberating alternatives can now be re-focused on other code that might be more important.
 
-Back to the code in question - we can explore different structures that may improve readability, but the lack of general-purpose, higher-order functions in Go limits our options.  We can experiment with different abstractions, but at the end of the day we're just moving around the `if` statements.
+Back to the code in question - we can explore different structures that may clarify its control flow, but the lack of general-purpose, higher-order functions in Go limits our options.  We can experiment with different abstractions, but at the end of the day we're just moving around the `if` statements.
 
 
 [gofmt]: https://golang.org/cmd/gofmt
@@ -98,16 +98,18 @@ Back to the code in question - we can explore different structures that may impr
 
 ## Non-idiomatic options
 
-Let us briefly consider a few tempting options that are likely to raise eyebrows in the Go community, in all but the rarest of circumstances.
+You may be familiar with other approaches to error handling and control flow that are used in other languages, and it can be tempting to try to apply your favorite technique to Go.  Let us briefly consider a few tempting options that are likely to raise eyebrows in the Go community, in all but the rarest of circumstances.
 
 
 ### Defer, Panic, Recover
 
 The first is called [Defer, Panic, and Recover][golang-blog-defer-panic-recover], where `panic` and `recover` are used to simulate the effects of `throw` and `catch` in other languages like Java and C#.  There are a few points worth noting here:
 
-* Although the authors do [cite a case where it's used in Go standard libraries][json-decode], note that these details are never exposed to the client.  Outside of this function, `panic` is reserved for truly catastrophic, non-recoverable errors (much like the [`Error` class in Java][java-error]).
-* The theoretical argument that exceptions break Referential Transparency.  Martin Odersky describes this well in his book [Functional Programming in Scala][fp-in-scala-book].  To sum it up: code that can throw an exception can evaluate to different values depending on whether or not it is surrounded in a `try/catch` block, so the programmer has to be aware of more, global context.  There's a nice [example of this on GitHub][fp-in-scala-example] and a [concise explanation in this answer][stackoverflow-referential-transparency].
-* The practical argument that it can be [difficult to distinguish correct and incorrect exception-based code][chen-harder-to-recognize].
+* The Go authors do [cite a case where it's used in Go standard libraries][json-decode], but they have also been careful to keep panics from escaping to the outside world.  In most cases, `panic` is reserved for truly catastrophic errors (much like the [`Error` class in Java][java-error] is used for non-recoverable errors).
+* The theoretical argument that exceptions break Referential Transparency: Martin Odersky describes this well in his book [Functional Programming in Scala][fp-in-scala-book].  To sum it up: code that can throw an exception can evaluate to different values depending on whether or not it is surrounded in a `try/catch` block, so the programmer has to be aware of more, global context.  There's a nice [example of this on GitHub][fp-in-scala-example] and a [concise explanation in this answer][stackoverflow-referential-transparency].
+* The practical argument: It's [difficult to distinguish correct and incorrect exception-based code][chen-harder-to-recognize].
+
+The Go authors tend to make distinctions between expected branches in control flow (valid and invalid input, for example) and large-scale events that threaten the process as a whole.  If you are to remain in the good graces of the Go community, you should make an effort to reserve `panic` for the latter.
 
 
 [chen-harder-to-recognize]: https://blogs.msdn.microsoft.com/oldnewthing/20050114-00/?p=36693/
@@ -121,24 +123,35 @@ The first is called [Defer, Panic, and Recover][golang-blog-defer-panic-recover]
 
 ### Higher-order functions and wrapper types
 
-Go authors like Rob Pike say over and over again to [just write a "for" loop][robpike-filter], but it's hard to resist thinking about the example problem in terms of a series of transformations.  After all, isn't the example code just going through a sequence of steps?
+Go authors like Rob Pike say over and over again to [just write a "for" loop][robpike-filter], but it's hard to resist thinking about the example problem as a series of transformations:
 
-* read the first line of text up to CRLF from the `bufio.Reader`
-* parse that line into a `RequestLine{ Method, Target, Version string }`
-* look through known routes for the given `RequestLine` to get an executable `Request{ Handle(client io.Writer) }`
-* -or- return the first error `Reponse` encountered, during the process.
+    bufio.Reader -> string -> RequestLine -> Request  
+    
+_Shouldn't we be able to write a `map` function for this?_
 
-Go is a statically typed language without generics.  That means the following options are out:
+Go is a statically typed language without generics, so your options are to declare types and functions with the types specific to your domain, or abandon type safety altogether.
 
-* A type-safe [`Either` type][scala-either] like the one in Scala
-* Wrapping normal and error values in a tuple, as in Erlang and Elixir
-* Writing type-safe versions of higher-order functions like `map`
+Imagine what it would look like if you tried to write `map`:
 
-One could write a few trivial variations like `func mapIntToInt(value int, func(int) int) int` and `func mapStringToInt(value string, func(string) int) int`, but that doesn't help with our own, custom types.
+{% highlight go %}
+// Sure, we can declare a few commonly-used variations...
+func mapIntToInt(value int, func(int) int) int { ... }
+func mapStringToInt(value string, func(string) int) int { ... }
 
-If type safety is to be abandoned, there are options like [this Go Promise library][github-go-promise].  But why then are you using a language with static types if you're going to bypass type checking?
+// ...but how does this help?
+func map(value interface{}, mapper func(interface{}) interface{}) interface{} { ... }
+{% endhighlight %}
 
-The final option is to write your own, domain-specific `Map` functions inside your own package.  That may be practical under some circumstances, but the example code grows unreasonably large.  For this code to work (which doesn't technically, because intermediate results are needed later):
+There are options that abandon type safety, like [this Go Promise library][github-go-promise].  However, take a close look at how the example code carefully sidestep the issue of type safety by using the output value in a function - `fmt.Println` - that doesn't care about its type.
+
+{% highlight go %}
+var p = promise.New(...)
+p.Then(func(data interface{}) {
+    fmt.Println("The result is:", data)
+})
+{% endhighlight %}
+
+Making a a wrapper like Scala's [`Either` type][scala-either] doesn't really solve the problem either, because it would need to have type-safe functions to transform happy- and sad-path values.  It would be nice to be able to write the example function a bit more like this:
 
 {% highlight go %}
 func (router RequestLineRouter) parseRequestLine(reader *bufio.Reader) (Request, Response) {
@@ -149,6 +162,7 @@ func (router RequestLineRouter) parseRequestLine(reader *bufio.Reader) (Request,
 	if response != nil {
 		return nil, response
 	} else if request == nil {
+		//Technically, this doesn't work because we now lack the intermediate value
 		return nil, requested.NotImplemented()
 	} else {
 		return request, nil
@@ -156,7 +170,7 @@ func (router RequestLineRouter) parseRequestLine(reader *bufio.Reader) (Request,
 }
 {% endhighlight %}
 
-It request a **significant** amount of support code:
+But look how much single-use code you would have to write to support that:
 
 {% highlight go %}
 func newStringOrResponse(data string, err Response) *StringOrResponse {
@@ -195,7 +209,7 @@ func (mapper *RequestLineOrResponse) Map(routeRequest func(requested *RequestLin
 }
 {% endhighlight %}
 
-So this approach is either non-idiomatic, impractical, or both.  It's a good reminder that - in the Go community - it's often preferable to write code for your specific purposes than to try to make a one-size-fits-all solution.
+So the various forms of writing higher-order functions wind up being non-idiomatic, impractical, or both.  Go simply is not a functional language.
 
 
 [github-go-promise]: https://github.com/chebyrash/promise
