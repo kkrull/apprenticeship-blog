@@ -87,11 +87,6 @@ Go uses an approach I haven't seen before, and it is documented in yet another F
 The pattern I keep seeing is:
 
 {% highlight go %}
-
-{% endhighlight %}
-
-
-{% highlight go %}
 func DoSomethingThatMayFail() (result <type>, err error) { ... }
 
 var goodResult, err := DoSomethingThatMayFail()
