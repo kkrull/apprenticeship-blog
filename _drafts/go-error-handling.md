@@ -229,11 +229,11 @@ The other bit of good news is that you can't unknowingly ignore a returned error
 [robpike-errors-are-values]: https://blog.golang.org/errors-are-values
 
 
-### Refactor your workflow
+### Function grouping
 
 Looking back at the example code, there are 2 definite errors (input not ending in CRLF and not-well-formed CRLF lines), 1 clearly successful response, and 1 default response.
 
-Why don't we just group those together with some more functions?
+Why don't we just group those cases together?
 
 {% highlight go %}
 func (router RequestLineRouter) parseRequestLine(reader *bufio.Reader) (Request, Response) {
@@ -266,56 +266,107 @@ func (router RequestLineRouter) routedRequestOrNotImplemented(requested *Request
 }
 {% endhighlight %}
 
-Here, we're back to using plain old Go code.  We get the benefit of a smaller `parseRequestLine` at the cost of a couple of helpers functions.  You get to decide which end of the trade-off works for you: more functions that are smaller, or fewer functions that are a bit larger?
+Here we get the benefit of a smaller `parseRequestLine` at the cost of a couple of extra functions.  You get to decide which end of the trade-off works for you: more functions that are smaller, or fewer functions that are a bit larger?
 
 
-## First approach - refactor your control flow
+### Happy- and sad-paths in parallel
 
-Function call wrapping: I could have refactored it to
+Another approach could be to refactor the existing functions to handle happy and sad paths, at the same time.  Multiple values can be passed from one function to another.
 
-* one parse function that reads the line and parses it, handling the two error cases
-* one handler function that uses the implemented handler or falls back to not implemented
-* at that point, I'm back to a simple if/else and that's idomatic and non-crazy
+{% highlight go %}
+func (router RequestLineRouter) parseRequestLine(reader *bufio.Reader) (Request, Response) {
+	return router.routeRequest(parseRequestLine(readCRLFLine(reader)))
+}
 
-What would wrapper functions look like?  doThirdThing(neededFor3, doSecondThing(neededFor2, doFirstThing(neededFor1)))
-  Each function would have to have a guard clause that returns the error right away, if there is already an error
+//Same as before
+func readCRLFLine(reader *bufio.Reader) (string, Response) { ... }
 
-https://stackoverflow.com/questions/37346694/go-best-practice-to-handle-error-from-multiple-abstract-level
+func parseRequestLine(text string, priorError Response) (*RequestLine, Response) {
+	if priorError != nil {
+		//No input, or not ending in CRLF
+		return nil, priorError
+	}
+
+	fields := strings.Split(text, " ")
+	if len(fields) != 3 {
+		return nil, &clienterror.BadRequest{DisplayText: "incorrectly formatted or missing request-line"}
+	}
+
+	return &RequestLine{
+		Method: fields[0],
+		Target: fields[1],
+	}, nil
+}
+
+func (router RequestLineRouter) routeRequest(requested *RequestLine, priorError Response) (Request, Response) {
+	if priorError != nil {
+		//No input, not ending in CRLF, or not well-formed
+		return nil, priorError
+	}
+
+	for _, route := range router.routes {
+		request := route.Route(requested)
+		if request != nil {
+			//Valid request to a known route
+			return request, nil
+		}
+	}
+
+	//Valid request, but unknown route
+	return nil, &servererror.NotImplemented{Method: requested.Method}
+}
+{% endhighlight %}
+
+Instead of 4 `if` guards in the original example, we're down to 3 without adding any more functions.  The trade-off is having to read the higher-level `parseRequestLine` inside-out.
 
 
-## Closure over errors
+### Closure for errors
 
-Cite Rob Pike article.
+It's worth noting another approach, which is simply to [create a closure][pike-error-closure] over the first error.  The example code in the cited article starts like this:
 
-https://blog.golang.org/error-handling-and-go
+{% highlight go %}
+_, err = fd.Write(p0[a:b])
+if err != nil {
+    return err
+}
+_, err = fd.Write(p1[c:d])
+if err != nil {
+    return err
+}
+_, err = fd.Write(p2[e:f])
+if err != nil {
+    return err
+}
+{% endhighlight %}
+
+The author creates a `func` that applies the next step as long as no error has been encountered yet.
+
+{% highlight go %}
+var err error
+write := func(buf []byte) {
+    if err != nil {
+        return
+    }
+    _, err = w.Write(buf)
+}
+write(p0[a:b])
+write(p1[c:d])
+write(p2[e:f])
+if err != nil {
+    return err
+}
+{% endhighlight %}
+
+This approach works well when you can pass each step in your workflow to the closure, which suggests that each step should operate on the same types.  In some cases, this can work great.
+
+In the example I've been using in this blog, you would have to create a `struct` to close over the error and write a separate application function for each step in the workflow.  In this case, I think it would add more complexity than it removes.
 
 
-> In Go, error handling is important. The language's design and conventions encourage you to explicitly check for errors where they occur (as distinct from the convention in other languages of throwing exceptions and sometimes catching them). In some cases this makes Go code verbose, but fortunately there are some techniques you can use to minimize repetitive error handling.
+[pike-error-closure]: https://blog.golang.org/errors-are-values
 
 
+## Conclusion
 
-## State machine-ish
+Although Go's design choices in error handling seemed foreign to me at first, it's clear from the various blogs and talks the authors have given that their design choices were not arbitrary.  I try to remember in cases like this that the burden of inexperience lies with me - not with the Go authors - and that I can learn to think of an old problem in new ways.
 
-* show the example code
-* it's long; I wouldn't recommend it in all cases
-* you're really not saving on if guards; you're just moving them around and naming intermediate states
-
-
-## Continuation Passing Style
-
-* What the example would look like, in CPS
-* Is it practical?  
-
-True CPS - can the next success/old error/new error function be passed in as a second parameter?
-
-https://codeburst.io/behind-continuations-passing-style-practical-examples-in-go-b59f2b6fdb2c
-
-
-## Summary
-
-* I can use a state machine when I really want to, but it's usually more verbose than it's worth.
-* I can just live with functions containing multiple points of failure being longer than I prefer.
-* Making my own custom error types really isn't that bad
-
-
-However foreign the Go authors' choices in error handling may seem, it's clear from the various blogs and talks they have given that their design choices were not arbitrary.  I try to remember in cases like this that the burden of inexperience lies with me - not with the language creators - and that I can learn to think of an old problem in new ways.
+When I started writing this article, I thought it might be possible to apply experiences from other, more functional languages to make my Go code simpler.  This experience has been a good reminder to me of what Go authors have been emphasizing all along: sometimes it's better just to write some code for your specific situation and move on.
